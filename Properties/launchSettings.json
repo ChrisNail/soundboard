@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Soundboard": {
+      "commandName": "Project",
+      "commandLineArgs": "\"E:\\Music\\Wheelhaus.mp3\" -1 -1 0.5"
+    }
+  }
+}
