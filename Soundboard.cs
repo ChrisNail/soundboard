@@ -1,91 +1,140 @@
 ﻿using NAudio.Wave;
 using System;
+using System.Collections.Generic;
 using System.Threading;
 
 namespace Soundboard {
     class Soundboard {
 
         private static string filename = null;
-        private static int mainDeviceNumber = -1;
-        private static int auxDeviceNumber = -1;
-        private static float volume = 1.0f;
+        private static List<int> deviceNumberList = new List<int> { -1 };
+        private static List<float> volumeList = new List<float> { 1.0f };
 
         static void Main(string[] args) {
-            processInput(args);
-            try {
+            if (args.Length == 0 || args[0].ToLower().Contains("help")) {
+                printHelpMessage();
+            } else if (args[0].ToLower().Contains("scan")) {
+                scanDevices();
+            } else if (args[0].ToLower().Contains("play")) {
+                parsePlayOptions(args);
                 playSounds();
-            } catch(Exception e) {
-                exitWithMessage(e.ToString());
+            } else {
+                throw new ArgumentException("Use 'help' for a list of valid commands.", "command");
             }
-            
         }
 
-        static void processInput(string[] args) {
-            if (args.Length < 2) {
-                Console.WriteLine("Available output devices:");
-                for (int i = 0; i < WaveOut.DeviceCount; i++) {
-                    var caps = WaveOut.GetCapabilities(i);
-                    Console.WriteLine(i + ": " + caps.ProductName);
-                }
+        static void printHelpMessage() {
+            Console.WriteLine("Usage: soundboard.exe command [options]");
+            Console.WriteLine("Commands:");
+            Console.WriteLine("\thelp : Display this help text.");
+            Console.WriteLine("\tscan : Scan for device numbers.");
+            Console.WriteLine("\tplay : Play an audio file.");
+            Console.WriteLine("Options:");
+            Console.WriteLine("\t-f : Audio file path. (REQUIRED)");
+            Console.WriteLine("\t-d : Output device numbers (comma-separated)");
+            Console.WriteLine("\t-v : Output volume");
+            Console.Write("Press any key to exit...");
+            Console.Read();
+        }
 
-                exitWithMessage("Usage: {filename} {main output device number} {aux output device number} {volume}");
+        static void scanDevices() {
+            Console.WriteLine("Available output devices:");
+            for (int i = -1; i < WaveOut.DeviceCount; i++) {
+                var caps = WaveOut.GetCapabilities(i);
+                Console.WriteLine(i + ": " + caps.ProductName);
+            }
+        }
+
+        static void parsePlayOptions(string[] args) {
+            for (int i = 1; i < args.Length; i++) {
+                switch (args[i]) {
+                    case "-f":
+                        filename = args[i + 1];
+                        break;
+                    case "-d":
+                        parseDeviceNumbers(args[i + 1]);
+                        break;
+                    case "-v":
+                        parseVolumeInput(args[i + 1]);
+                        break;
+                }
             }
 
-            filename = args[0];
-
-            try {
-                if (args.Length > 1) {
-                    mainDeviceNumber = Int32.Parse(args[1]);
-                }
-
-                if (args.Length > 2) {
-                    auxDeviceNumber = Int32.Parse(args[2]);
-                } else {
-                    auxDeviceNumber = mainDeviceNumber;
-                }
-
-                if (args.Length > 3) {
-                    volume = float.Parse(args[3]);
-                }
-            } catch(Exception e) {
-                exitWithMessage(e.ToString());
+            if (filename == null) {
+                throw new ArgumentException("No audio file supplied.", "audioFile");
             }
 
-            
+            for (int i = 0; i < deviceNumberList.Count; i++) {
+                var caps = WaveOut.GetCapabilities(deviceNumberList[i]);
+                float volume = volumeList.Count > i ? volumeList[i] * 100 : volumeList[0] * 100;
+                Console.WriteLine("Playing on " + caps.ProductName + " at volume " + (int)volume);
+            }
+        }
+
+        static void parseDeviceNumbers(string args) {
+            string[] numberStringList = args.Split(',');
+            deviceNumberList = new List<int>();
+            foreach (string numberString in numberStringList) {
+                try {
+                    int number = int.Parse(numberString);
+                    var caps = WaveOut.GetCapabilities(number);
+                    Console.WriteLine("Selected Device: " + caps.ProductName);
+                    deviceNumberList.Add(number);
+                } catch (Exception e) {
+                    throw new ArgumentException("Devices must be a comma-separated list of valid device indices.", "devices");
+                }
+            }
+        }
+
+        static void parseVolumeInput(string args) {
+            string[] volumeStringList = args.Split(',');
+            volumeList = new List<float>();
+            foreach (string volumeString in volumeStringList) {
+                try {
+                    float volume = float.Parse(volumeString);
+                    if (volume < 0.0f || volume > 1.0f) {
+                        throw new ArgumentOutOfRangeException();
+                    }
+                    volumeList.Add(volume);
+                } catch (Exception e) {
+                    throw new ArgumentOutOfRangeException("volume", "Volumes must be between 0.0 and 1.0.");
+                }
+            }
         }
 
         static void playSounds() {
-            using var mainAudioFile = new AudioFileReader(filename);
-            using var auxAudioFile = new AudioFileReader(filename);
-            using WaveOutEvent mainOutputDevice = new WaveOutEvent() { DeviceNumber = mainDeviceNumber, Volume = volume };
-            using WaveOutEvent auxOutputDevice = new WaveOutEvent() { DeviceNumber = auxDeviceNumber, Volume = volume };
+            using DisposableList<AudioFileReader> audioFileList = new DisposableList<AudioFileReader>();
+            using DisposableList<WaveOutEvent> outputDeviceList = new DisposableList<WaveOutEvent>();
+            for (int i = 0; i < deviceNumberList.Count; i++) {
+                AudioFileReader audioFile = new AudioFileReader(@filename);
+                audioFileList.Add(audioFile);
+                WaveOutEvent outputDevice = new WaveOutEvent() { DeviceNumber = deviceNumberList[i] };
+                if (volumeList.Count > i) {
+                    outputDevice.Volume = volumeList[i];
+                } else {
+                    outputDevice.Volume = volumeList[0];
+                }
 
-            var caps = WaveOut.GetCapabilities(mainDeviceNumber);
-            Console.WriteLine("Playing on " + caps.ProductName);
-            mainOutputDevice.Init(mainAudioFile);
-
-            if (mainDeviceNumber != auxDeviceNumber) {
-                caps = WaveOut.GetCapabilities(auxDeviceNumber);
-                Console.WriteLine("Playing on " + caps.ProductName);
-                auxOutputDevice.Init(auxAudioFile);
-            }
-            
-            mainOutputDevice.Play();
-
-            if (mainDeviceNumber != auxDeviceNumber) {
-                auxOutputDevice.Play();
+                outputDeviceList.Add(outputDevice);
+                outputDeviceList[i].Init(audioFileList[i]);
             }
 
-            while (mainOutputDevice.PlaybackState == PlaybackState.Playing || auxOutputDevice.PlaybackState == PlaybackState.Playing) {
-                Thread.Sleep(1000);
+            for (int i = 0; i < outputDeviceList.Count; i++) {
+                outputDeviceList[i].Play();
             }
-        }
 
-        static void exitWithMessage(string message) {
-            Console.WriteLine(message);
-            Console.Write("Press any key to exit...");
-            Console.Read();
-            Environment.Exit(0);
+            bool playbackFinished = true;
+
+            do {
+                playbackFinished = true;
+                foreach (WaveOutEvent outputEvent in outputDeviceList) {
+                    Thread.Sleep(100);
+                    if (outputEvent.PlaybackState == PlaybackState.Playing) {
+                        playbackFinished = false;
+                        break;
+                    }
+                }
+            } while (!playbackFinished);
         }
     }
 }
