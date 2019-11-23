@@ -33,8 +33,6 @@ namespace Soundboard {
             Console.WriteLine("\t-f : Audio file path. (REQUIRED)");
             Console.WriteLine("\t-d : Output device numbers (comma-separated)");
             Console.WriteLine("\t-v : Output volume");
-            Console.Write("Press any key to exit...");
-            Console.Read();
         }
 
         static void scanDevices() {
@@ -77,8 +75,6 @@ namespace Soundboard {
             foreach (string numberString in numberStringList) {
                 try {
                     int number = int.Parse(numberString);
-                    var caps = WaveOut.GetCapabilities(number);
-                    Console.WriteLine("Selected Device: " + caps.ProductName);
                     deviceNumberList.Add(number);
                 } catch (Exception e) {
                     throw new ArgumentException("Devices must be a comma-separated list of valid device indices.", "devices");
