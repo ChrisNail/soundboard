@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Threading;
+using System.Windows.Forms;
 
 namespace Soundboard {
     class Soundboard {
@@ -10,41 +11,24 @@ namespace Soundboard {
         private static List<int> deviceNumberList = new List<int> { -1 };
         private static List<float> volumeList = new List<float> { 1.0f };
 
+        private static InformationWindow window = null;
+
         static void Main(string[] args) {
-            if (args.Length == 0 || args[0].ToLower().Contains("help")) {
-                printHelpMessage();
-            } else if (args[0].ToLower().Contains("scan")) {
-                scanDevices();
-            } else if (args[0].ToLower().Contains("play")) {
+            if (args.Length == 0) {
+                displayInformation();
+            } else {
                 parsePlayOptions(args);
                 playSounds();
-            } else {
-                throw new ArgumentException("Use 'help' for a list of valid commands.", "command");
             }
         }
 
-        static void printHelpMessage() {
-            Console.WriteLine("Usage: soundboard.exe command [options]");
-            Console.WriteLine("Commands:");
-            Console.WriteLine("\thelp : Display this help text.");
-            Console.WriteLine("\tscan : Scan for device numbers.");
-            Console.WriteLine("\tplay : Play an audio file.");
-            Console.WriteLine("Options:");
-            Console.WriteLine("\t-f : Audio file path. (REQUIRED)");
-            Console.WriteLine("\t-d : Output device numbers (comma-separated)");
-            Console.WriteLine("\t-v : Output volume");
-        }
-
-        static void scanDevices() {
-            Console.WriteLine("Available output devices:");
-            for (int i = -1; i < WaveOut.DeviceCount; i++) {
-                var caps = WaveOut.GetCapabilities(i);
-                Console.WriteLine(i + ": " + caps.ProductName);
-            }
+        static void displayInformation() {
+            window = new InformationWindow();
+            Application.Run(window);
         }
 
         static void parsePlayOptions(string[] args) {
-            for (int i = 1; i < args.Length; i++) {
+            for (int i = 0; i < args.Length; i++) {
                 switch (args[i]) {
                     case "-f":
                         filename = args[i + 1];
@@ -62,10 +46,13 @@ namespace Soundboard {
                 throw new ArgumentException("No audio file supplied.", "audioFile");
             }
 
+            // Verify Devices
             for (int i = 0; i < deviceNumberList.Count; i++) {
-                var caps = WaveOut.GetCapabilities(deviceNumberList[i]);
-                float volume = volumeList.Count > i ? volumeList[i] * 100 : volumeList[0] * 100;
-                Console.WriteLine("Playing on " + caps.ProductName + " at volume " + (int)volume);
+                try {
+                    WaveOut.GetCapabilities(deviceNumberList[i]);
+                } catch (Exception e) {
+                    throw new ArgumentException("Device ID " + deviceNumberList[i] + " is not a valid device.", e);
+                }
             }
         }
 
@@ -77,7 +64,7 @@ namespace Soundboard {
                     int number = int.Parse(numberString);
                     deviceNumberList.Add(number);
                 } catch (Exception e) {
-                    throw new ArgumentException("Devices must be a comma-separated list of valid device indices.", "devices");
+                    throw new ArgumentException("Device ID " + numberString + " is invalid.", e);
                 }
             }
         }
@@ -89,11 +76,11 @@ namespace Soundboard {
                 try {
                     float volume = float.Parse(volumeString);
                     if (volume < 0.0f || volume > 1.0f) {
-                        throw new ArgumentOutOfRangeException();
+                        throw new ArgumentException("Volume " + volume + " is not between 0.0 and 1.0");
                     }
                     volumeList.Add(volume);
                 } catch (Exception e) {
-                    throw new ArgumentOutOfRangeException("volume", "Volumes must be between 0.0 and 1.0.");
+                    throw new ArgumentOutOfRangeException("volume", e);
                 }
             }
         }
