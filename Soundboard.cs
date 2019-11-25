@@ -17,8 +17,12 @@ namespace Soundboard {
             if (args.Length == 0) {
                 displayInformation();
             } else {
-                parsePlayOptions(args);
-                playSounds();
+                try {
+                    parsePlayOptions(args);
+                    playSounds();
+                } catch (Exception e) {
+                    MessageBox.Show(e.Message, "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
             }
         }
 
@@ -43,7 +47,7 @@ namespace Soundboard {
             }
 
             if (filename == null) {
-                throw new ArgumentException("No audio file supplied.", "audioFile");
+                throw new ArgumentException("No audio file supplied.");
             }
 
             // Verify Devices
@@ -80,7 +84,7 @@ namespace Soundboard {
                     }
                     volumeList.Add(volume);
                 } catch (Exception e) {
-                    throw new ArgumentOutOfRangeException("volume", e);
+                    throw new ArgumentException("Volume " + volumeString + " is invalid.", e);
                 }
             }
         }
@@ -92,13 +96,13 @@ namespace Soundboard {
                 AudioFileReader audioFile = new AudioFileReader(@filename);
                 audioFileList.Add(audioFile);
                 WaveOutEvent outputDevice = new WaveOutEvent() { DeviceNumber = deviceNumberList[i] };
+                outputDeviceList.Add(outputDevice);
                 if (volumeList.Count > i) {
-                    outputDevice.Volume = volumeList[i];
+                    audioFileList[i].Volume = volumeList[i];
                 } else {
-                    outputDevice.Volume = volumeList[0];
+                    audioFileList[i].Volume = volumeList[0];
                 }
 
-                outputDeviceList.Add(outputDevice);
                 outputDeviceList[i].Init(audioFileList[i]);
             }
 
